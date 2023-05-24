@@ -1,0 +1,154 @@
+---
+title: "Prediction Assignment Writeup"
+author: "Youssef Wannouch"
+date: "2023-05-23"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+**DATA SOURCE** 
+
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+
+The data for this project come from this source: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+# Load the required libraries
+library(dplyr)
+library(tidyverse)
+library(caret)
+library(randomForest)
+library(e1071)
+library(rpart)
+library(rpart.plot)
+library(rattle)
+library(ggplot2)
+```
+
+**Load the Data**
+```{r, echo=TRUE, warning=FALSE, message=FALSE}
+
+# Load the training data
+training_data <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
+
+# Load the testing data
+testing_data <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")
+```
+
+**Data Exploration**
+```{r, echo=TRUE, results='hide'}
+
+# Checking the structure of the training data
+str(training_data)
+
+# Checking the structure of the testing data
+str(testing_data)
+
+# Summary of the training data
+summary(training_data)
+
+# Summary of the testing data
+summary(testing_data)
+
+# Checking for missing values in the training data
+sum(is.na(training_data))
+
+# Checking for missing values in the testing data
+sum(is.na(testing_data))
+```
+
+**Data Partitioning**
+```{r}
+# Splitting the training data into a training set and a validation set
+set.seed(12345)
+trainIndex <- createDataPartition(training_data$classe, p = 0.7, list = FALSE)
+trainSet <- training_data[trainIndex, ]
+validationSet <- training_data[-trainIndex, ]
+```
+
+**Data Cleaning**
+```{r}
+
+# Removing Variables with Nearly Zero Variance
+NZV <- nearZeroVar(trainSet)
+trainSet <- trainSet[, -NZV]
+validationSet <- validationSet[, -NZV]
+
+# Removing variables that are mostly NA
+AllNA <- sapply( trainSet, function(x) mean(is.na(x))) > 0.95
+trainSet <- trainSet[, AllNA==FALSE]
+validationSet <- validationSet[, AllNA==FALSE]
+
+# Removing columns that are not related to the predictors
+trainSet <- trainSet[, -(1:7)]
+validationSet <- validationSet[, -(1:7)]
+
+# Converting the classe variable to a factor 
+trainSet$classe <- as.factor(trainSet$classe)
+validationSet$classe <- as.factor(validationSet$classe)
+```
+
+**Model Building**
+```{r}
+# Building a random forest model
+set.seed(12345)
+rfModel <- randomForest(classe ~ ., data = trainSet, ntree = 100)
+
+# Building a decision tree model
+set.seed(12345)
+rpartModel <- rpart(classe ~ ., data = trainSet, method = "class")
+
+# Building a support vector machine model
+set.seed(12345)
+svmModel <- svm(classe ~ ., data = trainSet)
+```
+
+**Model Evaluation** 
+
+```{r}
+# Predicting the validation set results
+rfPrediction <- predict(rfModel, validationSet)
+rpartPrediction <- predict(rpartModel, validationSet, type = "class")
+svmPrediction <- predict(svmModel, validationSet)
+
+# Printing the confusion matrix for each model
+print(confusionMatrix(rfPrediction, validationSet$classe))
+#Accuracy for Random Forest Model is 99.61%
+
+print(confusionMatrix(rpartPrediction, validationSet$classe))
+#Accuracy for Decision Tree Model is 68.94%
+
+print(confusionMatrix(svmPrediction, validationSet$classe))
+#Accuracy for SVM Model is 94.17%
+```
+
+**Model Selection**
+```{r}
+# Selecting the model with the highest accuracy
+models <- list(rfModel, rpartModel, svmModel)
+predictions <- list(rfPrediction, rpartPrediction, svmPrediction)
+accuracies <- sapply(predictions, function(pred) sum(pred == validationSet$classe) / nrow(validationSet))
+bestModelIndex <- which.max(accuracies)
+bestModel <- models[[bestModelIndex]]
+finalPrediction <- predict(bestModel, testing_data)
+
+# Print the best model and its accuracy
+bestModelName <- names(models)[bestModelIndex]
+bestAccuracy <- accuracies[bestModelIndex]
+print(paste("Best Model:", bestModelName))
+print(paste("Accuracy:", bestAccuracy))
+print(finalPrediction)
+```
+**CONCLUSION**
+
+THE RANDOM FOREST MODEL HAS THE HIGHEST PREDICTION ACCURACY AND SHOULD BE USED OVER THE SVM MODEL AND DECISION TREE MODEL. 
